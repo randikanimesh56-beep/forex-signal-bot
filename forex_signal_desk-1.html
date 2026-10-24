@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1220">
+<title>Forex Signal Desk</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121c2d;--line:#25334a;--muted:#9aabc2;--text:#edf4ff;--green:#20c997;--red:#ff647c;--gold:#f5c46b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:960px;margin:auto;padding:18px}header{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:1.35rem;margin:0} .sub{color:var(--muted);font-size:.88rem;margin-top:5px}
+.badge{border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--gold);font-size:.8rem}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;min-width:0}.span12{grid-column:span 12}.span8{grid-column:span 8}.span6{grid-column:span 6}.span4{grid-column:span 4}
+label{display:block;color:var(--muted);font-size:.82rem;margin-bottom:6px}input,select,button{width:100%;border:1px solid var(--line);border-radius:9px;background:#0c1524;color:var(--text);padding:11px;font:inherit}
+button{background:#315de8;border:0;font-weight:700;cursor:pointer;margin-top:10px}button:disabled{opacity:.55;cursor:wait}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.price{font-size:1.8rem;font-weight:750;letter-spacing:.02em}.muted{color:var(--muted)}.signal{font-size:1.55rem;font-weight:800}.buy{color:var(--green)}.sell{color:var(--red)}.wait{color:var(--gold)}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.metric{background:#0c1524;border-radius:9px;padding:10px}.metric b{display:block;margin-top:5px}
+canvas{width:100%;height:230px;display:block}.notice{font-size:.83rem;color:var(--muted);line-height:1.5}.status{font-size:.85rem;margin-top:10px;overflow-wrap:anywhere}
+table{width:100%;border-collapse:collapse;font-size:.85rem}th,td{text-align:left;padding:9px 5px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}
+@media(max-width:650px){main{padding:12px}.span8,.span6,.span4{grid-column:span 12}.price{font-size:1.55rem}.metrics{grid-template-columns:1fr 1fr 1fr}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>Forex Signal Desk</h1><div class="sub">EUR/USD · EMA + RSI + MACD · Signal-only dashboard</div></div><div class="badge">REAL-MARKET DATA · NOT OTC</div></header>
+<div class="grid">
+<section class="card span12">
+<div class="row">
+<div><label for="apiKey">Twelve Data API key</label><input id="apiKey" type="password" placeholder="Paste your API key"></div>
+<div><label for="timeframe">Chart timeframe</label><select id="timeframe"><option value="1min">1 minute</option><option value="5min">5 minutes</option><option value="15min">15 minutes</option><option value="30min">30 minutes</option><option value="1h">1 hour</option></select></div>
+</div>
+<div class="row" style="margin-top:10px">
+<div><label for="expiry">Digital Options expiry (reference only)</label><select id="expiry"><option>1 minute</option><option>2 minutes</option><option>3 minutes</option><option>5 minutes</option></select></div>
+<div><label for="refresh">Dashboard refresh</label><input id="refresh" value="5 seconds (fixed)" readonly></div>
+</div>
+<button id="start">Connect market data</button>
+<div id="status" class="status muted">Add your API key, then connect. Data refresh is limited by the provider's plan.</div>
+</section>
+<section class="card span4"><label>Latest EUR/USD close</label><div class="price" id="price">—</div><div class="sub" id="candleTime">Waiting for data</div></section>
+<section class="card span4"><label>Current signal</label><div class="signal wait" id="signal">WAIT</div><div class="sub" id="signalReason">Waiting for enough candles</div></section>
+<section class="card span4"><label>Signal checks</label><div class="metrics"><div class="metric"><span class="muted">EMA 9/21</span><b id="ema">—</b></div><div class="metric"><span class="muted">RSI 14</span><b id="rsi">—</b></div><div class="metric"><span class="muted">MACD</span><b id="macd">—</b></div></div></section>
+<section class="card span12"><label>Recent candles (close-price view)</label><canvas id="chart" width="900" height="230"></canvas><div class="notice">This simple preview connects to Twelve Data's candle endpoint. It is not the IQ Option chart or payout feed. The 5-second refresh updates the dashboard clock; the free data plan may not provide new candles every 5 seconds.</div></section>
+<section class="card span12"><label>Signal history (this browser session)</label><div style="overflow-x:auto"><table><thead><tr><th>Local time</th><th>Signal</th><th>Timeframe</th><th>Price</th><th>Rule check</th></tr></thead><tbody id="history"><tr><td colspan="5" class="muted">No signals yet</td></tr></tbody></table></div></section>
+<section class="card span12"><div class="notice"><b>Important limitations</b><br>• Signals are technical-rule outputs, not predictions or guarantees of profit.<br>• The selected timeframe is a candle interval, not the 5-second refresh rate. This provider supports 1-minute and longer candle intervals; 5S/15S/30S candles are not offered by this endpoint.<br>• The free plan has API quotas. This page fetches market candles no more than once per minute to avoid wasting requests; the dashboard itself refreshes every 5 seconds.<br>• For privacy, the API key is entered in this browser page and is not sent to a server run by this app. But any key used in a public static website can be inspected by the browser, so use a restricted/low-quota key and do not reuse a sensitive key.</div></section>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let candles=[],lastFetch=0,busy=false,historyRows=[],lastLogged='';
+const fmt=(n,d=5)=>Number(n).toFixed(d);
+function ema(values,period){let k=2/(period+1),out=[];let prev=values[0];out.push(prev);for(let i=1;i<values.length;i++){prev=values[i]*k+prev*(1-k);out.push(prev)}return out}
+function rsi(values,period=14){if(values.length<=period)return null;let gain=0,loss=0;for(let i=values.length-period;i<values.length;i++){let diff=values[i]-values[i-1];if(diff>0)gain+=diff;else loss-=diff}if(loss===0)return 100;return 100-100/(1+gain/loss)}
+function calcSignal(data){
+ const c=data.map(x=>Number(x.close)); if(c.length<35)return {signal:'WAIT',reason:'Need at least 35 candles',e9:null,e21:null,r:null,m:null,h:null};
+ const e9=ema(c,9),e21=ema(c,21),fast=ema(c,12),slow=ema(c,26),line=fast.map((v,i)=>v-slow[i]),sig=ema(line,9),i=c.length-1;
+ const r=rsi(c,14),hist=line[i]-sig[i];
+ const up=e9[i]>e21[i]&&r>50&&hist>0,down=e9[i]<e21[i]&&r<50&&hist<0;
+ return {signal:up?'BUY':down?'SELL':'WAIT',reason:up?'EMA bullish + RSI > 50 + MACD positive':down?'EMA bearish + RSI < 50 + MACD negative':'Indicators are not fully aligned',e9:e9[i],e21:e21[i],r,m:line[i],h:hist};
+}
+function drawChart(data){const cv=$('chart'),ctx=cv.getContext('2d'),w=cv.width,h=cv.height;ctx.clearRect(0,0,w,h);ctx.strokeStyle='#25334a';ctx.fillStyle='#9aabc2';ctx.font='12px system-ui';for(let j=0;j<5;j++){let y=12+j*(h-28)/4;ctx.beginPath();ctx.moveTo(45,y);ctx.lineTo(w-8,y);ctx.stroke()}
+if(!data.length)return;let vals=data.map(x=>Number(x.close)),min=Math.min(...vals),max=Math.max(...vals);if(max===min){max+=.0001;min-=.0001}ctx.fillStyle='#9aabc2';ctx.fillText(max.toFixed(5),2,16);ctx.fillText(min.toFixed(5),2,h-7);ctx.strokeStyle='#20c997';ctx.lineWidth=2;ctx.beginPath();vals.forEach((v,i)=>{let x=45+i*(w-60)/Math.max(1,vals.length-1),y=12+(max-v)*(h-28)/(max-min);if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.stroke()}
+function render(){if(!candles.length)return;let last=candles[0],c=calcSignal(candles);$('price').textContent=fmt(last.close);$('candleTime').textContent='Last candle: '+last.datetime;$('signal').textContent=c.signal;$('signal').className='signal '+(c.signal==='BUY'?'buy':c.signal==='SELL'?'sell':'wait');$('signalReason').textContent=c.reason;$('ema').textContent=c.e9===null?'—':(c.e9>c.e21?'Bullish':'Bearish');$('rsi').textContent=c.r===null?'—':c.r.toFixed(1);$('macd').textContent=c.h===null?'—':(c.h>0?'Positive':'Negative');drawChart(candles.slice().reverse());
+if(c.signal!=='WAIT'&&lastLogged!==last.datetime+c.signal){lastLogged=last.datetime+c.signal;historyRows.unshift({time:new Date().toLocaleTimeString(),signal:c.signal,tf:$('timeframe').value,price:fmt(last.close),reason:c.reason});historyRows=historyRows.slice(0,20);$('history').innerHTML=historyRows.map(r=>`<tr><td>${r.time}</td><td class="${r.signal==='BUY'?'buy':'sell'}">${r.signal}</td><td>${r.tf}</td><td>${r.price}</td><td>${r.reason}</td></tr>`).join('')}
+}
+async function fetchData(force=false){if(busy)return;if(!force&&Date.now()-lastFetch<60000)return;const key=$('apiKey').value.trim();if(!key){$('status').textContent='Please enter a Twelve Data API key first.';return}busy=true;$('start').disabled=true;$('status').textContent='Fetching latest candles…';
+try{const interval=$('timeframe').value;const url=`https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=${encodeURIComponent(interval)}&outputsize=100&order=desc&apikey=${encodeURIComponent(key)}`;const res=await fetch(url);const json=await res.json();if(!res.ok||json.status==='error'||!json.values)throw new Error(json.message||'Could not retrieve market candles. Check API key, quota, or symbol access.');candles=json.values;lastFetch=Date.now();render();$('status').textContent='Connected · Last data fetch: '+new Date(lastFetch).toLocaleTimeString()+' · Next market-data fetch in up to 60 seconds.'}
+catch(e){$('status').textContent='Data error: '+e.message}
+finally{busy=false;$('start').disabled=false}}
+$('start').addEventListener('click',()=>{lastFetch=0;fetchData(true)});
+$('timeframe').addEventListener('change',()=>{lastFetch=0;fetchData(true)});
+setInterval(()=>{if(candles.length){const remaining=Math.max(0,60-Math.floor((Date.now()-lastFetch)/1000));$('status').textContent='Dashboard refreshed · Market data next check in '+remaining+'s · Last fetch '+new Date(lastFetch).toLocaleTimeString();}fetchData(false)},5000);
+</script>
+</body>
+</html>
